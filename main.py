@@ -97,13 +97,17 @@ async def handle_files(message: Message, state: FSMContext):
     await state.clear()
 
     for admin_id in ADMINS:
-        await bot.send_message(admin_id, f"🆕 Новая заявка\nUSER_ID: {uid}")
+        # Отправляем текстовое уведомление о новой заявке
+        await bot.send_message(admin_id,
+                               f"🆕 Новая заявка от пользователя {uid}!\n"
+                               "Используй /view {uid} для просмотра файлов, "
+                               "/accept {uid} для одобрения, /reject {uid} для отклонения.")
+        # Отправляем все файлы заявки
         for file in applications[uid]["files"]:
             if file["type"] == "photo":
                 await bot.send_photo(admin_id, file["file_id"])
             else:
                 await bot.send_document(admin_id, file["file_id"])
-
 # ================= АДМИН =================
 @dp.message(Command("admin"))
 async def admin_panel(message: Message):
