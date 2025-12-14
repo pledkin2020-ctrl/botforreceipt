@@ -34,14 +34,11 @@ class UploadChecks(StatesGroup):
 
 
 # ================= ХРАНЕНИЕ =================
-
 def load_applications():
     if not os.path.exists(DATA_FILE):
         return {}
-
     if os.path.getsize(DATA_FILE) == 0:
         return {}
-
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -56,9 +53,7 @@ def save_applications(data: dict):
 
 applications = load_applications()
 
-
 # ================= ТЕКСТЫ =================
-
 START_TEXT = (
     "Получи 6-ю процедуру «Сухой Туман» бесплатно! 🎁\n"
     "Воспользуйся услугой 5 раз — 6-я в подарок 💨 Все просто:\n"
@@ -68,23 +63,15 @@ START_TEXT = (
     "Нажми «Начать» и забери свой бонус уже сегодня!"
 )
 
-
 # ================= ПОЛЬЗОВАТЕЛЬ =================
-
 @dp.message(CommandStart())
 async def start(message: Message, state: FSMContext):
     uid = str(message.from_user.id)
-
     if uid not in applications:
-        applications[uid] = {
-            "files": [],
-            "status": "pending"
-        }
+        applications[uid] = {"files": [], "status": "pending"}
         save_applications(applications)
-
     await message.answer(START_TEXT)
     await state.set_state(UploadChecks.waiting_files)
-
 
 @dp.message(UploadChecks.waiting_files)
 async def handle_files(message: Message, state: FSMContext):
@@ -94,17 +81,14 @@ async def handle_files(message: Message, state: FSMContext):
         await message.answer("Отправь фото или файл чека")
         return
 
-    file_id = (
-        message.document.file_id
-        if message.document
-        else message.photo[-1].file_id
-    )
+    if message.document:
+        applications[uid]["files"].append({"type": "document", "file_id": message.document.file_id})
+    else:
+        applications[uid]["files"].append({"type": "photo", "file_id": message.photo[-1].file_id})
 
-    applications[uid]["files"].append(file_id)
     save_applications(applications)
 
     count = len(applications[uid]["files"])
-
     if count < 4:
         await message.answer(f"Принято {count}/4")
         return
@@ -113,16 +97,14 @@ async def handle_files(message: Message, state: FSMContext):
     await state.clear()
 
     for admin_id in ADMINS:
-        await bot.send_message(
-            admin_id,
-            f"🆕 Новая заявка\nUSER_ID: {uid}"
-        )
-        for f_id in applications[uid]["files"]:
-            await bot.send_document(admin_id, f_id)
-
+        await bot.send_message(admin_id, f"🆕 Новая заявка\nUSER_ID: {uid}")
+        for file in applications[uid]["files"]:
+            if file["type"] == "photo":
+                await bot.send_photo(admin_id, file["file_id"])
+            else:
+                await bot.send_document(admin_id, file["file_id"])
 
 # ================= АДМИН =================
-
 @dp.message(Command("admin"))
 async def admin_panel(message: Message):
     if message.from_user.id not in ADMINS:
@@ -133,7 +115,6 @@ async def admin_panel(message: Message):
         return
 
     text = "📋 Заявки:\n\n"
-
     for uid, app in applications.items():
         text += f"{uid} — {app['status']}\n"
 
@@ -146,7 +127,6 @@ async def admin_panel(message: Message):
 
     await message.answer(text)
 
-
 @dp.message(Command("view"))
 async def view_application(message: Message):
     if message.from_user.id not in ADMINS:
@@ -158,22 +138,21 @@ async def view_application(message: Message):
         return
 
     uid = parts[1]
-
     if uid not in applications:
         await message.answer("Заявка не найдена")
         return
 
     files = applications[uid]["files"]
-
     if not files:
         await message.answer("В заявке нет файлов")
         return
 
     await message.answer(f"📂 Файлы заявки {uid}:")
-
-    for f_id in files:
-        await bot.send_document(message.from_user.id, f_id)
-
+    for file in files:
+        if file["type"] == "photo":
+            await bot.send_photo(message.from_user.id, file["file_id"])
+        else:
+            await bot.send_document(message.from_user.id, file["file_id"])
 
 @dp.message(Command("accept"))
 async def accept_application(message: Message):
@@ -186,7 +165,6 @@ async def accept_application(message: Message):
         return
 
     uid = parts[1]
-
     if uid not in applications:
         await message.answer("Заявка не найдена")
         return
@@ -196,7 +174,6 @@ async def accept_application(message: Message):
 
     await bot.send_message(int(uid), "🎉 Ваша заявка одобрена!")
     await message.answer(f"Заявка {uid} одобрена")
-
 
 @dp.message(Command("reject"))
 async def reject_application(message: Message):
@@ -209,7 +186,6 @@ async def reject_application(message: Message):
         return
 
     uid = parts[1]
-
     if uid not in applications:
         await message.answer("Заявка не найдена")
         return
@@ -220,12 +196,9 @@ async def reject_application(message: Message):
     await bot.send_message(int(uid), "❌ Ваша заявка отклонена")
     await message.answer(f"Заявка {uid} отклонена")
 
-
 # ================= ЗАПУСК =================
-
 async def main():
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
