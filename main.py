@@ -18,51 +18,30 @@ ADMINS = [
     7503094593,
 ]
 
-DATA_FILE = "applications.txt"
-
-bot = Bot(BOT_TOKEN)
-dp = Dispatcher()
-
-# === FILE PATH (ABSOLUTE) ===
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "applications.txt")
 
+# ============================================
 
 bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
 
-# === FILE PATH (ABSOLUTE) ===
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "applications.txt")
+# ================= FSM =================
 
-
-bot = Bot(BOT_TOKEN)
-dp = Dispatcher()
-
-
-# === FSM ===
 class UploadChecks(StatesGroup):
     waiting_files = State()
 
 
-# === FILE PATH (ABSOLUTE) ===
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "applications.txt")
+# ================= ХРАНЕНИЕ =================
 
-bot = Bot(BOT_TOKEN)
-dp = Dispatcher()
-
-# === FSM ===
-class UploadChecks(StatesGroup):
-    waiting_files = State()
-
-# === STORAGE ===
 def load_applications():
     if not os.path.exists(DATA_FILE):
         return {}
+
     if os.path.getsize(DATA_FILE) == 0:
         return {}
+
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -77,6 +56,9 @@ def save_applications(data: dict):
 
 applications = load_applications()
 
+
+# ================= ТЕКСТЫ =================
+
 START_TEXT = (
     "Получи 6-ю процедуру «Сухой Туман» бесплатно! 🎁\n"
     "Воспользуйся услугой 5 раз — 6-я в подарок 💨 Все просто:\n"
@@ -86,16 +68,23 @@ START_TEXT = (
     "Нажми «Начать» и забери свой бонус уже сегодня!"
 )
 
+
+# ================= ПОЛЬЗОВАТЕЛЬ =================
+
 @dp.message(CommandStart())
 async def start(message: Message, state: FSMContext):
     uid = str(message.from_user.id)
 
     if uid not in applications:
-        applications[uid] = {"files": [], "status": "pending"}
+        applications[uid] = {
+            "files": [],
+            "status": "pending"
+        }
         save_applications(applications)
 
     await message.answer(START_TEXT)
     await state.set_state(UploadChecks.waiting_files)
+
 
 @dp.message(UploadChecks.waiting_files)
 async def handle_files(message: Message, state: FSMContext):
@@ -105,11 +94,17 @@ async def handle_files(message: Message, state: FSMContext):
         await message.answer("Отправь фото или файл чека")
         return
 
-    file_id = message.document.file_id if message.document else message.photo[-1].file_id
+    file_id = (
+        message.document.file_id
+        if message.document
+        else message.photo[-1].file_id
+    )
+
     applications[uid]["files"].append(file_id)
     save_applications(applications)
 
     count = len(applications[uid]["files"])
+
     if count < 4:
         await message.answer(f"Принято {count}/4")
         return
@@ -117,18 +112,17 @@ async def handle_files(message: Message, state: FSMContext):
     await message.answer("✅ Все чеки получены. Ожидай проверки")
     await state.clear()
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Одобрено", callback_data=f"approve:{uid}"),
-        InlineKeyboardButton(text="❌ Отказано", callback_data=f"reject:{uid}")
-    ]])
-
     for admin_id in ADMINS:
-        await bot.send_message(admin_id, f"🆕 Новая заявка\nID пользователя: {uid}")
+        await bot.send_message(
+            admin_id,
+            f"🆕 Новая заявка\nUSER_ID: {uid}"
+        )
         for f_id in applications[uid]["files"]:
             await bot.send_document(admin_id, f_id)
 
 
-# === ADMIN COMMANDS ===
+# ================= АДМИН =================
+
 @dp.message(Command("admin"))
 async def admin_panel(message: Message):
     if message.from_user.id not in ADMINS:
@@ -138,23 +132,23 @@ async def admin_panel(message: Message):
         await message.answer("Заявок нет")
         return
 
-    text = "📋 Заявки:
+    text = "📋 Заявки:\n\n"
 
-"
     for uid, app in applications.items():
-        text += f"{uid} — {app['status']}
-"
+        text += f"{uid} — {app['status']}\n"
 
-    text += "
-Команды:
-/view USER_ID — посмотреть файлы
-/accept USER_ID — одобрить
-/reject USER_ID — отклонить"
+    text += (
+        "\nКоманды:\n"
+        "/view USER_ID — посмотреть файлы\n"
+        "/accept USER_ID — одобрить\n"
+        "/reject USER_ID — отклонить"
+    )
+
     await message.answer(text)
 
 
 @dp.message(Command("view"))
-async def view_app(message: Message):
+async def view_application(message: Message):
     if message.from_user.id not in ADMINS:
         return
 
@@ -164,22 +158,25 @@ async def view_app(message: Message):
         return
 
     uid = parts[1]
+
     if uid not in applications:
         await message.answer("Заявка не найдена")
         return
 
     files = applications[uid]["files"]
+
     if not files:
         await message.answer("В заявке нет файлов")
         return
 
     await message.answer(f"📂 Файлы заявки {uid}:")
+
     for f_id in files:
         await bot.send_document(message.from_user.id, f_id)
 
 
 @dp.message(Command("accept"))
-async def accept_app(message: Message):
+async def accept_application(message: Message):
     if message.from_user.id not in ADMINS:
         return
 
@@ -189,6 +186,7 @@ async def accept_app(message: Message):
         return
 
     uid = parts[1]
+
     if uid not in applications:
         await message.answer("Заявка не найдена")
         return
@@ -201,7 +199,7 @@ async def accept_app(message: Message):
 
 
 @dp.message(Command("reject"))
-async def reject_app(message: Message):
+async def reject_application(message: Message):
     if message.from_user.id not in ADMINS:
         return
 
@@ -211,6 +209,7 @@ async def reject_app(message: Message):
         return
 
     uid = parts[1]
+
     if uid not in applications:
         await message.answer("Заявка не найдена")
         return
@@ -220,28 +219,13 @@ async def reject_app(message: Message):
 
     await bot.send_message(int(uid), "❌ Ваша заявка отклонена")
     await message.answer(f"Заявка {uid} отклонена")
-(message: Message):
-    if message.from_user.id not in ADMINS:
-        return
 
-    parts = message.text.split()
-    if len(parts) != 2:
-        await message.answer("Использование: /reject USER_ID")
-        return
 
-    uid = parts[1]
-    if uid not in applications:
-        await message.answer("Заявка не найдена")
-        return
-
-    applications[uid]["status"] = "rejected"
-    save_applications(applications)
-
-    await bot.send_message(int(uid), "❌ Ваша заявка отклонена")
-    await message.answer(f"Заявка {uid} отклонена")
+# ================= ЗАПУСК =================
 
 async def main():
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
