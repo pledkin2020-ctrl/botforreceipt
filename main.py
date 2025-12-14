@@ -23,16 +23,51 @@ DATA_FILE = "applications.txt"
 bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
+# === FILE PATH (ABSOLUTE) ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(BASE_DIR, "applications.txt")
+
+
+bot = Bot(BOT_TOKEN)
+dp = Dispatcher()
+
+
+# === FILE PATH (ABSOLUTE) ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(BASE_DIR, "applications.txt")
+
+
+bot = Bot(BOT_TOKEN)
+dp = Dispatcher()
+
+
+# === FSM ===
+class UploadChecks(StatesGroup):
+waiting_files = State()
+
+
+# === FILE PATH (ABSOLUTE) ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(BASE_DIR, "applications.txt")
+
+bot = Bot(BOT_TOKEN)
+dp = Dispatcher()
+
 # === FSM ===
 class UploadChecks(StatesGroup):
     waiting_files = State()
 
-# === FILE STORAGE ===
+# === STORAGE ===
 def load_applications():
     if not os.path.exists(DATA_FILE):
         return {}
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    if os.path.getsize(DATA_FILE) == 0:
+        return {}
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        return {}
 
 
 def save_applications(data: dict):
@@ -48,19 +83,17 @@ START_TEXT = (
     "1️⃣ Загрузи в бот 4 чека\n"
     "2️⃣ Мы быстро их проверим\n"
     "3️⃣ Получи кешбэк в рублях на 1 полноценную процедуру\n\n"
-    "💸 Никаких баллов — только реальные деньги\n"
-    "⚡️ Быстрое начисление\n"
-    "📲 Все через удобный Telegram-бот\n\n"
     "Нажми «Начать» и забери свой бонус уже сегодня!"
 )
 
 @dp.message(CommandStart())
 async def start(message: Message, state: FSMContext):
-    applications[str(message.from_user.id)] = {
-        "files": [],
-        "status": "pending"
-    }
-    save_applications(applications)
+    uid = str(message.from_user.id)
+
+    if uid not in applications:
+        applications[uid] = {"files": [], "status": "pending"}
+        save_applications(applications)
+
     await message.answer(START_TEXT)
     await state.set_state(UploadChecks.waiting_files)
 
@@ -69,18 +102,19 @@ async def handle_files(message: Message, state: FSMContext):
     uid = str(message.from_user.id)
 
     if not message.document and not message.photo:
-        await message.answer("Пожалуйста, отправь файл (фото или документ).")
+        await message.answer("Отправь фото или файл чека")
         return
 
     file_id = message.document.file_id if message.document else message.photo[-1].file_id
     applications[uid]["files"].append(file_id)
     save_applications(applications)
 
-    if len(applications[uid]["files"]) < 4:
-        await message.answer(f"Принято {len(applications[uid]['files'])}/4. Отправь ещё чек.")
+    count = len(applications[uid]["files"])
+    if count < 4:
+        await message.answer(f"Принято {count}/4")
         return
 
-    await message.answer("Все 4 чека получены ✅ Ожидай проверки.")
+    await message.answer("✅ Все чеки получены. Ожидай проверки")
     await state.clear()
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[
@@ -89,12 +123,14 @@ async def handle_files(message: Message, state: FSMContext):
     ]])
 
     for admin_id in ADMINS:
-        await bot.send_message(admin_id, f"🆕 Новая заявка\nПользователь: {uid}")
+        await bot.send_message(
+            admin_id,
+            f"🆕 Новая заявка\nПользователь: {uid}",
+            reply_markup=kb
+        )
         for f_id in applications[uid]["files"]:
             await bot.send_document(admin_id, f_id)
-        await bot.send_message(admin_id, "Выберите действие:", reply_markup=kb)
 
-# === ADMIN PANEL ===
 @dp.message(Command("admin"))
 async def admin_panel(message: Message):
     if message.from_user.id not in ADMINS:
@@ -104,11 +140,10 @@ async def admin_panel(message: Message):
         await message.answer("Заявок нет")
         return
 
-    text = "📋 Список заявок:\n\n"
+    text = "📋 Заявки:\n\n"
     for uid, app in applications.items():
-        status = app["status"]
-        emoji = "⏳" if status == "pending" else "✅" if status == "approved" else "❌"
-        text += f"{emoji} Пользователь {uid} — {status}\n"
+        emoji = "⏳" if app["status"] == "pending" else "✅" if app["status"] == "approved" else "❌"
+        text += f"{emoji} {uid} — {app['status']}\n"
 
     await message.answer(text)
 
@@ -116,20 +151,24 @@ async def admin_panel(message: Message):
 async def approve(call: CallbackQuery):
     if call.from_user.id not in ADMINS:
         return
+
     uid = call.data.split(":")[1]
     applications[uid]["status"] = "approved"
     save_applications(applications)
-    await bot.send_message(int(uid), "🎉 Ваши чеки одобрены! Заявка принята.")
+
+    await bot.send_message(int(uid), "🎉 Ваша заявка одобрена!")
     await call.message.edit_text("Заявка одобрена ✅")
 
 @dp.callback_query(F.data.startswith("reject:"))
 async def reject(call: CallbackQuery):
     if call.from_user.id not in ADMINS:
         return
+
     uid = call.data.split(":")[1]
     applications[uid]["status"] = "rejected"
     save_applications(applications)
-    await bot.send_message(int(uid), "❌ К сожалению, заявка отклонена.")
+
+    await bot.send_message(int(uid), "❌ Заявка отклонена")
     await call.message.edit_text("Заявка отклонена ❌")
 
 async def main():
