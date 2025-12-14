@@ -123,14 +123,12 @@ async def handle_files(message: Message, state: FSMContext):
     ]])
 
     for admin_id in ADMINS:
-        await bot.send_message(
-            admin_id,
-            f"🆕 Новая заявка\nПользователь: {uid}",
-            reply_markup=kb
-        )
+        await bot.send_message(admin_id, f"🆕 Новая заявка\nID пользователя: {uid}")
         for f_id in applications[uid]["files"]:
             await bot.send_document(admin_id, f_id)
 
+
+# === ADMIN COMMANDS ===
 @dp.message(Command("admin"))
 async def admin_panel(message: Message):
     if message.from_user.id not in ADMINS:
@@ -142,37 +140,59 @@ async def admin_panel(message: Message):
 
     text = "📋 Заявки:\n\n"
     for uid, app in applications.items():
-        emoji = "⏳" if app["status"] == "pending" else "✅" if app["status"] == "approved" else "❌"
-        text += f"{emoji} {uid} — {app['status']}\n"
+        text += f"{uid} — {app['status']}\n"
 
+    text += "\nИспользуй /accept USER_ID или /reject USER_ID"
     await message.answer(text)
 
-@dp.callback_query(F.data.startswith("approve:"))
-async def approve(call: CallbackQuery):
-    if call.from_user.id not in ADMINS:
+
+@dp.message(Command("accept"))
+async def accept_app(message: Message):
+    if message.from_user.id not in ADMINS:
         return
 
-    uid = call.data.split(":")[1]
+    parts = message.text.split()
+    if len(parts) != 2:
+        await message.answer("Использование: /accept USER_ID")
+        return
+
+    uid = parts[1]
+    if uid not in applications:
+        await message.answer("Заявка не найдена")
+        return
+
     applications[uid]["status"] = "approved"
     save_applications(applications)
 
     await bot.send_message(int(uid), "🎉 Ваша заявка одобрена!")
-    await call.message.edit_text("Заявка одобрена ✅")
+    await message.answer(f"Заявка {uid} одобрена")
 
-@dp.callback_query(F.data.startswith("reject:"))
-async def reject(call: CallbackQuery):
-    if call.from_user.id not in ADMINS:
+
+@dp.message(Command("reject"))
+async def reject_app(message: Message):
+    if message.from_user.id not in ADMINS:
         return
 
-    uid = call.data.split(":")[1]
+    parts = message.text.split()
+    if len(parts) != 2:
+        await message.answer("Использование: /reject USER_ID")
+        return
+
+    uid = parts[1]
+    if uid not in applications:
+        await message.answer("Заявка не найдена")
+        return
+
     applications[uid]["status"] = "rejected"
     save_applications(applications)
 
-    await bot.send_message(int(uid), "❌ Заявка отклонена")
-    await call.message.edit_text("Заявка отклонена ❌")
+    await bot.send_message(int(uid), "❌ Ваша заявка отклонена")
+    await message.answer(f"Заявка {uid} отклонена")
+
 
 async def main():
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
