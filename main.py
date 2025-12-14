@@ -138,12 +138,44 @@ async def admin_panel(message: Message):
         await message.answer("Заявок нет")
         return
 
-    text = "📋 Заявки:\n\n"
-    for uid, app in applications.items():
-        text += f"{uid} — {app['status']}\n"
+    text = "📋 Заявки:
 
-    text += "\nИспользуй /accept USER_ID или /reject USER_ID"
+"
+    for uid, app in applications.items():
+        text += f"{uid} — {app['status']}
+"
+
+    text += "
+Команды:
+/view USER_ID — посмотреть файлы
+/accept USER_ID — одобрить
+/reject USER_ID — отклонить"
     await message.answer(text)
+
+
+@dp.message(Command("view"))
+async def view_app(message: Message):
+    if message.from_user.id not in ADMINS:
+        return
+
+    parts = message.text.split()
+    if len(parts) != 2:
+        await message.answer("Использование: /view USER_ID")
+        return
+
+    uid = parts[1]
+    if uid not in applications:
+        await message.answer("Заявка не найдена")
+        return
+
+    files = applications[uid]["files"]
+    if not files:
+        await message.answer("В заявке нет файлов")
+        return
+
+    await message.answer(f"📂 Файлы заявки {uid}:")
+    for f_id in files:
+        await bot.send_document(message.from_user.id, f_id)
 
 
 @dp.message(Command("accept"))
@@ -188,11 +220,28 @@ async def reject_app(message: Message):
 
     await bot.send_message(int(uid), "❌ Ваша заявка отклонена")
     await message.answer(f"Заявка {uid} отклонена")
+(message: Message):
+    if message.from_user.id not in ADMINS:
+        return
 
+    parts = message.text.split()
+    if len(parts) != 2:
+        await message.answer("Использование: /reject USER_ID")
+        return
+
+    uid = parts[1]
+    if uid not in applications:
+        await message.answer("Заявка не найдена")
+        return
+
+    applications[uid]["status"] = "rejected"
+    save_applications(applications)
+
+    await bot.send_message(int(uid), "❌ Ваша заявка отклонена")
+    await message.answer(f"Заявка {uid} отклонена")
 
 async def main():
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
