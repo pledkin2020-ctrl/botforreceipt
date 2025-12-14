@@ -15,7 +15,7 @@ BOT_TOKEN = "8394021240:AAHHZy_PkUcGSCn_jmj2l6fBVjNvYyghK5E"
 # === ADMIN IDS (зашиты в файл) ===
 ADMINS = [
     123456789,
-    987654321,
+    7503094593,
 ]
 
 DATA_FILE = "applications.txt"
