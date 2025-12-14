@@ -43,7 +43,7 @@ dp = Dispatcher()
 
 # === FSM ===
 class UploadChecks(StatesGroup):
-waiting_files = State()
+    waiting_files = State()
 
 
 # === FILE PATH (ABSOLUTE) ===
