@@ -21,7 +21,9 @@ BOT_TOKEN = "8394021240:AAHHZy_PkUcGSCn_jmj2l6fBVjNvYyghK5E"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "applications.txt")
 ADMINS_FILE = os.path.join(BASE_DIR, "admins.txt")
-
+class UploadFSM(StatesGroup):
+    waiting_files = State()
+    reject_reason = State()
 
 
 def load_admins() -> set[int]:
