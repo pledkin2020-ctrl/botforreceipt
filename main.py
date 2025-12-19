@@ -109,7 +109,7 @@ async def handle_user_buttons(message: Message, state: FSMContext):
         await state.set_state(UploadChecks.waiting_files)
         await message.answer("Отправь 5 файлов/фото чеков по одному.")
 
-        elif text == "🆘 Поддержка":
+    elif text == "🆘 Поддержка":
         for admin_id in ADMINS:
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [
