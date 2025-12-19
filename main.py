@@ -18,7 +18,8 @@ from aiogram.fsm.state import StatesGroup, State
 BOT_TOKEN = "8394021240:AAHHZy_PkUcGSCn_jmj2l6fBVjNvYyghK5E"
 
 # === ADMIN IDS (зашиты в файл) ===
-ADMINS_FILE = os.path.join(BASE_DIR, "admins.txt")
+
+
 
 
 def load_admins() -> set[int]:
@@ -38,7 +39,7 @@ admins = load_admins()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "applications.txt")
-
+ADMINS_FILE = os.path.join(BASE_DIR, "admins.txt")
 # ============================================
 
 bot = Bot(BOT_TOKEN)
