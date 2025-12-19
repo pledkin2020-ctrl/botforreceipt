@@ -1,11 +1,16 @@
-# requirements:
 # pip install aiogram==3.*
 
 import asyncio
 import json
 import os
+
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    Message,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -33,7 +38,12 @@ class UploadChecks(StatesGroup):
     waiting_files = State()
 
 
+class RejectReason(StatesGroup):
+    waiting_reason = State()
+
+
 # ================= ХРАНЕНИЕ =================
+
 def load_applications():
     if not os.path.exists(DATA_FILE):
         return {}
@@ -54,6 +64,7 @@ def save_applications(data: dict):
 applications = load_applications()
 
 # ================= ТЕКСТЫ =================
+
 START_TEXT = (
     "Получи 6-ю процедуру «Сухой Туман» бесплатно! 🎁\n"
     "Воспользуйся услугой 5 раз — 6-я в подарок 💨 Все просто:\n"
@@ -64,14 +75,22 @@ START_TEXT = (
 )
 
 # ================= ПОЛЬЗОВАТЕЛЬ =================
+
 @dp.message(CommandStart())
 async def start(message: Message, state: FSMContext):
     uid = str(message.from_user.id)
+
     if uid not in applications:
-        applications[uid] = {"files": [], "status": "pending"}
+        applications[uid] = {
+            "files": [],
+            "status": "pending",
+            "reject_reason": None
+        }
         save_applications(applications)
+
     await message.answer(START_TEXT)
     await state.set_state(UploadChecks.waiting_files)
+
 
 @dp.message(UploadChecks.waiting_files)
 async def handle_files(message: Message, state: FSMContext):
@@ -82,9 +101,15 @@ async def handle_files(message: Message, state: FSMContext):
         return
 
     if message.document:
-        applications[uid]["files"].append({"type": "document", "file_id": message.document.file_id})
+        applications[uid]["files"].append({
+            "type": "document",
+            "file_id": message.document.file_id
+        })
     else:
-        applications[uid]["files"].append({"type": "photo", "file_id": message.photo[-1].file_id})
+        applications[uid]["files"].append({
+            "type": "photo",
+            "file_id": message.photo[-1].file_id
+        })
 
     save_applications(applications)
 
@@ -97,18 +122,26 @@ async def handle_files(message: Message, state: FSMContext):
     await state.clear()
 
     for admin_id in ADMINS:
-        # Отправляем текстовое уведомление о новой заявке
-        await bot.send_message(admin_id,
-                               f"🆕 Новая заявка от пользователя {uid}!\n"
-                               "Используй /view {uid} для просмотра файлов, "
-                               "/accept {uid} для одобрения, /reject {uid} для отклонения.")
-        # Отправляем все файлы заявки
-        for file in applications[uid]["files"]:
-            if file["type"] == "photo":
-                await bot.send_photo(admin_id, file["file_id"])
-            else:
-                await bot.send_document(admin_id, file["file_id"])
+        await bot.send_message(
+            admin_id,
+            f"🆕 Новая заявка от пользователя {uid}\nИспользуй /admin"
+        )
+
 # ================= АДМИН =================
+
+def applications_keyboard():
+    kb = InlineKeyboardMarkup(inline_keyboard=[])
+
+    for uid, app in applications.items():
+        kb.inline_keyboard.append([
+            InlineKeyboardButton(
+                text=f"{uid} — {app['status']}",
+                callback_data=f"view:{uid}"
+            )
+        ])
+    return kb
+
+
 @dp.message(Command("admin"))
 async def admin_panel(message: Message):
     if message.from_user.id not in ADMINS:
@@ -118,91 +151,91 @@ async def admin_panel(message: Message):
         await message.answer("Заявок нет")
         return
 
-    text = "📋 Заявки:\n\n"
-    for uid, app in applications.items():
-        text += f"{uid} — {app['status']}\n"
-
-    text += (
-        "\nКоманды:\n"
-        "/view USER_ID — посмотреть файлы\n"
-        "/accept USER_ID — одобрить\n"
-        "/reject USER_ID — отклонить"
+    await message.answer(
+        "📋 Список заявок:",
+        reply_markup=applications_keyboard()
     )
 
-    await message.answer(text)
 
-@dp.message(Command("view"))
-async def view_application(message: Message):
-    if message.from_user.id not in ADMINS:
-        return
+@dp.callback_query(F.data.startswith("view:"))
+async def view_application(callback: CallbackQuery):
+    uid = callback.data.split(":")[1]
 
-    parts = message.text.split()
-    if len(parts) != 2:
-        await message.answer("Использование: /view USER_ID")
-        return
+    await callback.message.answer(f"📂 Файлы заявки {uid}:")
 
-    uid = parts[1]
-    if uid not in applications:
-        await message.answer("Заявка не найдена")
-        return
-
-    files = applications[uid]["files"]
-    if not files:
-        await message.answer("В заявке нет файлов")
-        return
-
-    await message.answer(f"📂 Файлы заявки {uid}:")
-    for file in files:
+    for file in applications[uid]["files"]:
         if file["type"] == "photo":
-            await bot.send_photo(message.from_user.id, file["file_id"])
+            await bot.send_photo(callback.from_user.id, file["file_id"])
         else:
-            await bot.send_document(message.from_user.id, file["file_id"])
+            await bot.send_document(callback.from_user.id, file["file_id"])
 
-@dp.message(Command("accept"))
-async def accept_application(message: Message):
-    if message.from_user.id not in ADMINS:
-        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Одобрить",
+                callback_data=f"accept:{uid}"
+            ),
+            InlineKeyboardButton(
+                text="❌ Отклонить",
+                callback_data=f"reject:{uid}"
+            )
+        ]
+    ])
 
-    parts = message.text.split()
-    if len(parts) != 2:
-        await message.answer("Использование: /accept USER_ID")
-        return
+    await callback.message.answer("Выберите действие:", reply_markup=kb)
+    await callback.answer()
 
-    uid = parts[1]
-    if uid not in applications:
-        await message.answer("Заявка не найдена")
-        return
+
+@dp.callback_query(F.data.startswith("accept:"))
+async def accept_application(callback: CallbackQuery):
+    uid = callback.data.split(":")[1]
 
     applications[uid]["status"] = "approved"
+    applications[uid]["reject_reason"] = None
     save_applications(applications)
 
     await bot.send_message(int(uid), "🎉 Ваша заявка одобрена!")
-    await message.answer(f"Заявка {uid} одобрена")
+    await callback.message.answer(f"✅ Заявка {uid} одобрена")
+    await callback.answer("Одобрено")
 
-@dp.message(Command("reject"))
-async def reject_application(message: Message):
-    if message.from_user.id not in ADMINS:
-        return
 
-    parts = message.text.split()
-    if len(parts) != 2:
-        await message.answer("Использование: /reject USER_ID")
-        return
+@dp.callback_query(F.data.startswith("reject:"))
+async def reject_start(callback: CallbackQuery, state: FSMContext):
+    uid = callback.data.split(":")[1]
 
-    uid = parts[1]
-    if uid not in applications:
-        await message.answer("Заявка не найдена")
-        return
+    await state.set_state(RejectReason.waiting_reason)
+    await state.update_data(uid=uid)
+
+    await callback.message.answer(
+        f"✍️ Введите причину отказа для заявки {uid}:"
+    )
+    await callback.answer()
+
+
+@dp.message(RejectReason.waiting_reason)
+async def reject_finish(message: Message, state: FSMContext):
+    data = await state.get_data()
+    uid = data["uid"]
+    reason = message.text
 
     applications[uid]["status"] = "rejected"
+    applications[uid]["reject_reason"] = reason
     save_applications(applications)
 
-    await bot.send_message(int(uid), "❌ Ваша заявка отклонена")
-    await message.answer(f"Заявка {uid} отклонена")
+    await bot.send_message(
+        int(uid),
+        f"❌ Ваша заявка отклонена.\n\nПричина:\n{reason}"
+    )
+
+    await message.answer(f"❌ Заявка {uid} отклонена\nПричина сохранена")
+    await state.clear()
+
 
 # ================= ЗАПУСК =================
+
 async def main():
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
