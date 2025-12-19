@@ -105,26 +105,25 @@ async def handle_user_buttons(message: Message, state: FSMContext):
     uid = str(message.from_user.id)
     text = message.text
 
+    # Обязательно проверяем FSM состояние
+    current_state = await state.get_state()
+    if current_state == UploadChecks.waiting_files:
+        return  # пропускаем, чтобы FSM-хендлер обрабатывал файлы
+
     if text == "📄 Отправить чеки":
         await state.set_state(UploadChecks.waiting_files)
-        await message.answer("Отправь 5 файлов/фото чеков по одному.")
+        await message.answer("Отправь 4 файла/фото чеков по одному.")
 
     elif text == "🆘 Поддержка":
-        for admin_id in ADMINS:
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="✉️ Написать пользователю",
-                        url=f"tg://user?id={uid}"  # открывает чат, не вызывает send_message
-                    )
-                ]
-            ])
-            await bot.send_message(
-                SUPPORT_CHAT_ID,
-                f"🆘 Пользователю {uid} нужна помощь!",
-                reply_markup=kb
-            )
-        await message.answer("✅ Запрос отправлен администраторам, ожидайте ответа.")
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✉️ Написать пользователю", url=f"tg://user?id={uid}")]
+        ])
+        await bot.send_message(
+            SUPPORT_CHAT_ID,
+            f"🆘 Пользователю {uid} нужна поддержка!",
+            reply_markup=kb
+        )
+        await message.answer("✅ Запрос отправлен в чат поддержки, ожидайте ответа.")
 # ================= ПОЛЬЗОВАТЕЛЬ =================
 
 @dp.message(CommandStart())
