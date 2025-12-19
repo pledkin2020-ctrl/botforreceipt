@@ -18,29 +18,14 @@ from aiogram.fsm.state import StatesGroup, State
 BOT_TOKEN = "8394021240:AAHHZy_PkUcGSCn_jmj2l6fBVjNvYyghK5E"
 
 # === ADMIN IDS (зашиты в файл) ===
+ADMINS = [
+    123456789,
+    7503094593,
+    1246638096,
+]
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "applications.txt")
-ADMINS_FILE = os.path.join(BASE_DIR, "admins.txt")
-class UploadFSM(StatesGroup):
-    waiting_files = State()
-    reject_reason = State()
-
-
-def load_admins() -> set[int]:
-    if not os.path.exists(ADMINS_FILE):
-        return set()
-    with open(ADMINS_FILE, "r", encoding="utf-8") as f:
-        return {int(line.strip()) for line in f if line.strip().isdigit()}
-
-
-def save_admins(admins: set[int]):
-    with open(ADMINS_FILE, "w", encoding="utf-8") as f:
-        for admin_id in admins:
-            f.write(f"{admin_id}\n")
-
-
-admins = load_admins()
-
 
 # ============================================
 
@@ -143,122 +128,112 @@ async def handle_files(message: Message, state: FSMContext):
             f"🆕 Новая заявка от пользователя {uid}\nИспользуй /admin"
         )
 
-# ================== ADMIN PANEL ==================
+# ================= АДМИН =================
+
+def applications_keyboard():
+    kb = InlineKeyboardMarkup(inline_keyboard=[])
+
+    for uid, app in applications.items():
+        kb.inline_keyboard.append([
+            InlineKeyboardButton(
+                text=f"{uid} — {app['status']}",
+                callback_data=f"view:{uid}"
+            )
+        ])
+    return kb
+
+
 @dp.message(Command("admin"))
 async def admin_panel(message: Message):
-    if not is_admin(message.from_user.id):
+    if message.from_user.id not in ADMINS:
         return
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"{uid} ({app['status']})",
-                    callback_data=f"view:{uid}",
-                )
-            ]
-            for uid, app in applications.items()
-        ]
-    )
+    if not applications:
+        await message.answer("Заявок нет")
+        return
 
-    await message.answer("📋 Заявки:", reply_markup=kb)
+    await message.answer(
+        "📋 Список заявок:",
+        reply_markup=applications_keyboard()
+    )
 
 
 @dp.callback_query(F.data.startswith("view:"))
-async def view_app(callback: CallbackQuery):
+async def view_application(callback: CallbackQuery):
     uid = callback.data.split(":")[1]
 
-    app = applications.get(uid)
-    if not app:
-        await callback.answer("Заявка не найдена")
-        return
+    await callback.message.answer(f"📂 Файлы заявки {uid}:")
 
-    for f in app["files"]:
-        if f["type"] == "photo":
-            await bot.send_photo(callback.from_user.id, f["file_id"])
+    for file in applications[uid]["files"]:
+        if file["type"] == "photo":
+            await bot.send_photo(callback.from_user.id, file["file_id"])
         else:
-            await bot.send_document(callback.from_user.id, f["file_id"])
+            await bot.send_document(callback.from_user.id, file["file_id"])
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="✅ Одобрить", callback_data=f"accept:{uid}"
-                ),
-                InlineKeyboardButton(
-                    text="❌ Отклонить", callback_data=f"reject:{uid}"
-                ),
-            ]
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Одобрить",
+                callback_data=f"accept:{uid}"
+            ),
+            InlineKeyboardButton(
+                text="❌ Отклонить",
+                callback_data=f"reject:{uid}"
+            )
         ]
-    )
+    ])
 
-    await bot.send_message(callback.from_user.id, "Решение:", reply_markup=kb)
+    await callback.message.answer("Выберите действие:", reply_markup=kb)
+    await callback.answer()
 
 
 @dp.callback_query(F.data.startswith("accept:"))
-async def accept(callback: CallbackQuery):
+async def accept_application(callback: CallbackQuery):
     uid = callback.data.split(":")[1]
 
     applications[uid]["status"] = "approved"
-    save_apps(applications)
+    applications[uid]["reject_reason"] = None
+    save_applications(applications)
 
     await bot.send_message(int(uid), "🎉 Ваша заявка одобрена!")
-    await callback.message.answer("✅ Одобрено")
+    await callback.message.answer(f"✅ Заявка {uid} одобрена")
+    await callback.answer("Одобрено")
 
 
 @dp.callback_query(F.data.startswith("reject:"))
-async def reject(callback: CallbackQuery, state: FSMContext):
+async def reject_start(callback: CallbackQuery, state: FSMContext):
     uid = callback.data.split(":")[1]
+
+    await state.set_state(RejectReason.waiting_reason)
     await state.update_data(uid=uid)
-    await state.set_state(UploadFSM.reject_reason)
-    await callback.message.answer("✍️ Введите причину отказа")
+
+    await callback.message.answer(
+        f"✍️ Введите причину отказа для заявки {uid}:"
+    )
+    await callback.answer()
 
 
-@dp.message(UploadFSM.reject_reason)
-async def reject_reason(message: Message, state: FSMContext):
+@dp.message(RejectReason.waiting_reason)
+async def reject_finish(message: Message, state: FSMContext):
     data = await state.get_data()
     uid = data["uid"]
+    reason = message.text
 
     applications[uid]["status"] = "rejected"
-    applications[uid]["reason"] = message.text
-    save_apps(applications)
+    applications[uid]["reject_reason"] = reason
+    save_applications(applications)
 
     await bot.send_message(
-        int(uid), f"❌ Заявка отклонена\nПричина: {message.text}"
+        int(uid),
+        f"❌ Ваша заявка отклонена.\n\nПричина:\n{reason}"
     )
-    await message.answer("❌ Заявка отклонена")
+
+    await message.answer(f"❌ Заявка {uid} отклонена\nПричина сохранена")
     await state.clear()
 
 
-# ================== ADMIN MANAGEMENT ==================
-@dp.message(Command("add_admin"))
-async def add_admin(message: Message):
-    if not is_admin(message.from_user.id):
-        return
-    _, uid = message.text.split()
-    admins.add(int(uid))
-    save_admins(admins)
-    await message.answer("✅ Админ добавлен")
+# ================= ЗАПУСК =================
 
-
-@dp.message(Command("del_admin"))
-async def del_admin(message: Message):
-    if not is_admin(message.from_user.id):
-        return
-    _, uid = message.text.split()
-    admins.discard(int(uid))
-    save_admins(admins)
-    await message.answer("🗑 Админ удалён")
-
-
-@dp.message(Command("admins"))
-async def admins_list(message: Message):
-    if not is_admin(message.from_user.id):
-        return
-    await message.answer("\n".join(map(str, admins)))
-
-
-# ================== START ==================
 async def main():
     await dp.start_polling(bot)
 
