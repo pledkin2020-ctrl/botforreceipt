@@ -27,7 +27,7 @@ ADMINS = [
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "applications.txt")
-
+SUPPORT_CHAT_ID = -4862737517  # <-- сюда вставь ID нужного чата
 # ============================================
 
 bot = Bot(BOT_TOKEN)
@@ -120,7 +120,7 @@ async def handle_user_buttons(message: Message, state: FSMContext):
                 ]
             ])
             await bot.send_message(
-                admin_id,
+                SUPPORT_CHAT_ID,
                 f"🆘 Пользователю {uid} нужна помощь!",
                 reply_markup=kb
             )
