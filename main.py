@@ -159,76 +159,83 @@ async def admin_panel(message: Message):
 
 
 @dp.callback_query(F.data.startswith("view:"))
-async def view_application(callback: CallbackQuery):
+async def view_app(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMINS:
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+
     uid = callback.data.split(":")[1]
+    app = applications.get(uid)
+    if not app:
+        await callback.answer("❌ Заявка не найдена", show_alert=True)
+        return
 
-    await callback.message.answer(f"📂 Файлы заявки {uid}:")
-
-    for file in applications[uid]["files"]:
-        if file["type"] == "photo":
-            await bot.send_photo(callback.from_user.id, file["file_id"])
+    # 1️⃣ Отправляем все файлы
+    for f in app["files"]:
+        if f["type"] == "photo":
+            await bot.send_photo(callback.from_user.id, f["file_id"])
         else:
-            await bot.send_document(callback.from_user.id, file["file_id"])
+            await bot.send_document(callback.from_user.id, f["file_id"])
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="✅ Одобрить",
-                callback_data=f"accept:{uid}"
-            ),
-            InlineKeyboardButton(
-                text="❌ Отклонить",
-                callback_data=f"reject:{uid}"
-            )
+    # 2️⃣ Кнопки: написать пользователю + Одобрить/Отклонить
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✉️ Написать пользователю",
+                    url=f"tg://user?id={uid}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✅ Одобрить",
+                    callback_data=f"accept:{uid}"
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отклонить",
+                    callback_data=f"reject:{uid}"
+                ),
+            ]
         ]
-    ])
-
-    await callback.message.answer("Выберите действие:", reply_markup=kb)
-    await callback.answer()
-
-
-@dp.callback_query(F.data.startswith("accept:"))
-async def accept_application(callback: CallbackQuery):
-    uid = callback.data.split(":")[1]
-
-    applications[uid]["status"] = "approved"
-    applications[uid]["reject_reason"] = None
-    save_applications(applications)
-
-    await bot.send_message(int(uid), "🎉 Ваша заявка одобрена!")
-    await callback.message.answer(f"✅ Заявка {uid} одобрена")
-    await callback.answer("Одобрено")
-
-
-@dp.callback_query(F.data.startswith("reject:"))
-async def reject_start(callback: CallbackQuery, state: FSMContext):
-    uid = callback.data.split(":")[1]
-
-    await state.set_state(RejectReason.waiting_reason)
-    await state.update_data(uid=uid)
-
-    await callback.message.answer(
-        f"✍️ Введите причину отказа для заявки {uid}:"
     )
-    await callback.answer()
-
-
-@dp.message(RejectReason.waiting_reason)
-async def reject_finish(message: Message, state: FSMContext):
-    data = await state.get_data()
-    uid = data["uid"]
-    reason = message.text
-
-    applications[uid]["status"] = "rejected"
-    applications[uid]["reject_reason"] = reason
-    save_applications(applications)
 
     await bot.send_message(
+        callback.from_user.id,
+        f"👤 Пользователь: `{uid}`\nСтатус: {app['status']}",
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+# Кнопка отклонения — спрашиваем причину
+@dp.callback_query(F.data.startswith("reject:"))
+async def reject(callback: CallbackQuery, state: FSMContext):
+    uid = callback.data.split(":")[1]
+    await state.update_data(uid=uid)
+    await state.set_state(UploadFSM.reject_reason)
+    await callback.message.answer("✍️ Введите причину отказа")
+    await callback.answer()
+
+
+# Админ вводит причину отказа
+@dp.message(UploadFSM.reject_reason)
+async def reject_reason(message: Message, state: FSMContext):
+    data = await state.get_data()
+    uid = data["uid"]
+
+    # Сохраняем статус и причину
+    applications[uid]["status"] = "rejected"
+    applications[uid]["reason"] = message.text
+    save_apps(applications)
+
+    # Отправляем пользователю с причиной
+    await bot.send_message(
         int(uid),
-        f"❌ Ваша заявка отклонена.\n\nПричина:\n{reason}"
+        f"❌ Ваша заявка отклонена\nПричина: {message.text}"
     )
 
-    await message.answer(f"❌ Заявка {uid} отклонена\nПричина сохранена")
+    await message.answer("❌ Заявка отклонена с причиной")
     await state.clear()
 
 
