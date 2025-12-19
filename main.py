@@ -173,6 +173,12 @@ async def view_application(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
+                text="✉️ Написать пользователю",
+                url=f"tg://user?id={uid}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 text="✅ Одобрить",
                 callback_data=f"accept:{uid}"
             ),
