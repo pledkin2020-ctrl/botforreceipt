@@ -14,6 +14,7 @@ from aiogram.types import (
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 BOT_TOKEN = "8394021240:AAHHZy_PkUcGSCn_jmj2l6fBVjNvYyghK5E"
 
@@ -75,6 +76,56 @@ START_TEXT = (
     "Нажми «Начать» и забери свой бонус уже сегодня!"
 )
 
+# ================== Клавиатура для пользователя ==================
+user_kb = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="📄 Отправить чеки"), KeyboardButton(text="🆘 Поддержка")]
+    ],
+    resize_keyboard=True
+)
+
+# ================== Старт ==================
+@dp.message(CommandStart())
+async def start(message: Message, state: FSMContext):
+    uid = str(message.from_user.id)
+
+    if uid not in applications:
+        applications[uid] = {
+            "files": [],
+            "status": "pending",
+            "reject_reason": None
+        }
+        save_applications(applications)
+
+    await message.answer(START_TEXT, reply_markup=user_kb)
+
+# ================== Обработка кнопок пользователя ==================
+@dp.message()
+async def handle_user_buttons(message: Message, state: FSMContext):
+    uid = str(message.from_user.id)
+    text = message.text
+
+    if text == "📄 Отправить чеки":
+        await state.set_state(UploadChecks.waiting_files)
+        await message.answer("Отправь 4 файла/фото чеков по одному.")
+
+    elif text == "🆘 Поддержка":
+        # Отправляем уведомление всем админам
+        for admin_id in ADMINS:
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✉️ Написать пользователю",
+                        url=f"tg://user?id={uid}"
+                    )
+                ]
+            ])
+            await bot.send_message(
+                admin_id,
+                f"🆘 Пользователю {uid} нужна помощь!",
+                reply_markup=kb
+            )
+        await message.answer("✅ Запрос отправлен администраторам, ожидайте ответа.")
 # ================= ПОЛЬЗОВАТЕЛЬ =================
 
 @dp.message(CommandStart())
