@@ -107,16 +107,15 @@ async def handle_user_buttons(message: Message, state: FSMContext):
 
     if text == "📄 Отправить чеки":
         await state.set_state(UploadChecks.waiting_files)
-        await message.answer("Отправь 4 файла/фото чеков по одному.")
+        await message.answer("Отправь 5 файлов/фото чеков по одному.")
 
-    elif text == "🆘 Поддержка":
-        # Отправляем уведомление всем админам
+        elif text == "🆘 Поддержка":
         for admin_id in ADMINS:
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [
                     InlineKeyboardButton(
                         text="✉️ Написать пользователю",
-                        url=f"tg://user?id={uid}"
+                        url=f"tg://user?id={uid}"  # открывает чат, не вызывает send_message
                     )
                 ]
             ])
