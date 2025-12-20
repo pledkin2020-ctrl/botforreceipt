@@ -92,8 +92,19 @@ START_TEXT = (
 
 @dp.message(CommandStart())
 async def start(message: Message, state: FSMContext):
-    uid = str(message.from_user.id)
+    user_id = message.from_user.id
+    uid = str(user_id)
 
+    # 🔐 ЕСЛИ АДМИН — НИКАКИХ ЧЕКОВ
+    if user_id in ADMINS:
+        await state.clear()
+        await message.answer(
+            "👨‍💼 Вы администратор\n"
+            "Используйте команду /admin для работы с заявками"
+        )
+        return
+
+    # 👤 ОБЫЧНЫЙ ПОЛЬЗОВАТЕЛЬ
     if uid not in applications:
         applications[uid] = {
             "files": [],
@@ -102,8 +113,8 @@ async def start(message: Message, state: FSMContext):
         }
         save_applications(applications)
 
-    await message.answer(START_TEXT, reply_markup=user_keyboard)
-    await state.clear()
+    await message.answer(START_TEXT)
+    await state.set_state(UploadChecks.waiting_files)
 
 
 # ⚠️ ВАЖНО: ТОЛЬКО ТЕКСТ
@@ -198,15 +209,21 @@ def applications_keyboard():
 
 
 @dp.message(Command("admin"))
-async def admin_panel(message: Message):
+async def admin_panel(message: Message, state: FSMContext):
     if message.from_user.id not in ADMINS:
         return
+
+    # ❗ ГАРАНТИРОВАННО УБИРАЕМ FSM
+    await state.clear()
 
     if not applications:
         await message.answer("Заявок нет")
         return
 
-    await message.answer("📋 Заявки:", reply_markup=applications_keyboard())
+    await message.answer(
+        "📋 Список заявок:",
+        reply_markup=applications_keyboard()
+    )
 
 
 @dp.callback_query(F.data.startswith("view:"))
