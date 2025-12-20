@@ -107,7 +107,7 @@ async def start_new_application(message: Message, state: FSMContext):
     })
     save_applications(applications)
 
-    await state.set_state(UploadFSM.waiting_files)
+    await state.set_state(UploadChecks.waiting_files)
     await state.update_data(uid=uid, app_id=app_id)
 
     await message.answer(
