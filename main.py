@@ -197,26 +197,30 @@ async def admin_panel(message: Message, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("view:"))
 async def view_application(callback: CallbackQuery):
-    _, uid, app_id = callback.data.split(":")
-    app_id = int(app_id)
+    uid = callback.data.split(":")[1]
 
-    app = next(a for a in applications[uid] if a["id"] == app_id)
+    await callback.message.answer(f"📂 Файлы заявки {uid}:")
 
-    for file in app["files"]:
+    for file in applications[uid]["files"]:
         if file["type"] == "photo":
             await bot.send_photo(callback.from_user.id, file["file_id"])
         else:
             await bot.send_document(callback.from_user.id, file["file_id"])
 
     await callback.message.answer(
-        "👤 Связь с пользователем:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(
-                text="✉️ Написать",
-                url=f"tg://user?id={uid}"
-            )
-        ]])
+        "👤 Перейти в личные сообщения:",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✉️ Написать пользователю",
+                        url=f"tg://user?id={uid}"
+                    )
+                ]
+            ]
+        )
     )
+
 
     await callback.message.answer(
         "Выберите действие:",
