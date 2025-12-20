@@ -318,10 +318,15 @@ async def reject_finish(message: Message, state: FSMContext):
 
     await bot.send_message(
         int(uid),
-        f"❌ Ваша заявка отклонена.\n\nПричина:\n{reason}"
+        f"❌ Ваша заявка отклонена.\n\n"
+        f"Причина:\n{reason}"
     )
 
-    await message.answer(f"❌ Заявка {uid} отклонена\nПричина сохранена")
+    await message.answer(
+        f"❌ Заявка {uid} отклонена\n"
+        f"Причина сохранена"
+    )
+
     await state.clear()
 
 
