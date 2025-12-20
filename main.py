@@ -244,12 +244,12 @@ async def accept_app(callback: CallbackQuery):
 @dp.callback_query(F.data.startswith("reject:"))
 async def reject_start(callback: CallbackQuery, state: FSMContext):
     _, uid, app_id = callback.data.split(":")
-    await state.set_state(RejectFSM.waiting_reason)
+    await state.set_state(RejectReason.waiting_reason)
     await state.update_data(uid=uid, app_id=int(app_id))
     await callback.message.answer("✍️ Введите причину отказа:")
     await callback.answer()
 
-@dp.message(RejectFSM.waiting_reason)
+@dp.message(RejectReason.waiting_reason)
 async def reject_finish(message: Message, state: FSMContext):
     data = await state.get_data()
     uid = data["uid"]
