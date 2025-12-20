@@ -171,6 +171,7 @@ async def handle_files(message: Message, state: FSMContext):
     await message.answer("✅ Все чеки получены, заявка отправлена на проверку")
     await state.clear()
 
+    for admin in admins:
         await bot.send_message(
             SUPPORT_CHAT_ID,
             f"🆕 Новая заявка от пользователя {uid}\nКоманда: /admin"
