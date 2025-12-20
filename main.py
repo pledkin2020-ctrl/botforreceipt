@@ -119,7 +119,7 @@ async def handle_user_buttons(message: Message, state: FSMContext):
         })
         save_applications(applications)
 
-        await message.answer("📤 Отправьте 4 фото или файла чеков")
+        await message.answer("📤 Отправьте 5 фото или файла чеков")
         await state.set_state(UploadChecks.waiting_files)
 
     elif message.text == "🆘 Поддержка":
@@ -171,11 +171,12 @@ async def handle_files(message: Message, state: FSMContext):
     await message.answer("✅ Все чеки получены, заявка отправлена на проверку")
     await state.clear()
 
-    for admin in admins:
-        await bot.send_message(
-            SUPPORT_CHAT_ID,
-            f"🆕 Новая заявка от пользователя {uid}\nКоманда: /admin"
-        )
+    await bot.send_message(
+        SUPPORT_CHAT_ID,
+        f"🆕 Новая заявка от пользователя {uid}\n"
+        f"Чеков: {count}\n"
+        f"Команда: /admin"
+    )
 
 
 @dp.message(UploadChecks.waiting_files)
