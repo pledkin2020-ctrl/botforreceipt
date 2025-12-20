@@ -135,7 +135,7 @@ async def support_request(message: Message):
 
 # ================= ЗАГРУЗКА ФАЙЛОВ =================
 
-@dp.message(UploadFSM.waiting_files, F.photo | F.document)
+@dp.message(UploadChecks.waiting_files, F.photo | F.document)
 async def handle_files(message: Message, state: FSMContext):
     data = await state.get_data()
     uid = data["uid"]
@@ -169,7 +169,7 @@ async def handle_files(message: Message, state: FSMContext):
         f"🆕 Новая заявка\nПользователь: {uid}\nЗаявка #{app_id}"
     )
 
-@dp.message(UploadFSM.waiting_files)
+@dp.message(UploadChecks.waiting_files, F.photo | F.document)
 async def wrong_content(message: Message):
     await message.answer("❗ Отправьте фото или файл")
 
