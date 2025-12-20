@@ -293,24 +293,37 @@ async def reject_start(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("✍️ Введите причину отказа:")
     await callback.answer()
 
+@dp.callback_query(F.data.startswith("reject:"))
+async def reject_start(callback: CallbackQuery, state: FSMContext):
+    uid = callback.data.split(":")[1]
+
+    await state.set_state(RejectReason.waiting_reason)
+    await state.update_data(uid=uid)
+
+    await callback.message.answer(
+        f"✍️ Введите причину отказа для заявки {uid}:"
+    )
+    await callback.answer()
+
 
 @dp.message(RejectReason.waiting_reason)
 async def reject_finish(message: Message, state: FSMContext):
     data = await state.get_data()
     uid = data["uid"]
-
     reason = message.text
+
     applications[uid]["status"] = "rejected"
     applications[uid]["reject_reason"] = reason
     save_applications(applications)
 
     await bot.send_message(
         int(uid),
-        f"❌ Ваша заявка отклонена\n\nПричина:\n{reason}"
+        f"❌ Ваша заявка отклонена.\n\nПричина:\n{reason}"
     )
 
-    await message.answer("❌ Заявка отклонена")
+    await message.answer(f"❌ Заявка {uid} отклонена\nПричина сохранена")
     await state.clear()
+
 
 # ================= ЗАПУСК =================
 
